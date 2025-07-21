@@ -1,6 +1,10 @@
 package handlers
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
+	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -27,22 +31,59 @@ func init() {
 
 // UploadResume uploads a new resume to the server
 func UploadResume(c *gin.Context) {
+	fmt.Printf("=== UPLOAD DEBUG ===\n")
+	fmt.Printf("Upload request received\n")
+	
 	userID, exists := c.Get("userID")
 	if !exists {
+		fmt.Printf("ERROR: User not authenticated\n")
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
 		return
 	}
+	fmt.Printf("User ID: %s\n", userID.(string))
 
 	file, err := c.FormFile("file")
 	if err != nil {
+		fmt.Printf("ERROR: Failed to get form file: %v\n", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Bad request: " + err.Error()})
 		return
 	}
+	fmt.Printf("File received: %s, Size: %d bytes\n", file.Filename, file.Size)
 
 	fileID := uuid.New().String()
-	destPath := filepath.Join(storagePath, fileID)
+	// Preserve original file extension for proper text extraction
+	originalExt := filepath.Ext(file.Filename)
+	filename := fileID
+	if originalExt != "" {
+		filename = fileID + originalExt
+	}
+	destPath := filepath.Join(storagePath, filename)
+	fmt.Printf("Saving file to: %s (original: %s, ext: %s)\n", destPath, file.Filename, originalExt)
 	if err := c.SaveUploadedFile(file, destPath); err != nil {
+		fmt.Printf("ERROR: Failed to save file: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not save file: " + err.Error()})
+		return
+	}
+	fmt.Printf("File saved successfully\n")
+
+	// Extract text content from the uploaded file
+	fmt.Printf("Starting text extraction from: %s\n", destPath)
+	textExtractor := services.NewTextExtractor()
+	textContent, err := textExtractor.ExtractText(destPath)
+	if err != nil {
+		fmt.Printf("ERROR: Text extraction failed: %v\n", err)
+		// Clean up the file if text extraction fails
+		os.Remove(destPath)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to extract text from file: " + err.Error()})
+		return
+	}
+	fmt.Printf("Text extraction completed successfully\n")
+
+	// Validate text content
+	if err := textExtractor.ValidateTextLength(textContent); err != nil {
+		// Clean up the file if validation fails
+		os.Remove(destPath)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid file content: " + err.Error()})
 		return
 	}
 
@@ -52,7 +93,8 @@ func UploadResume(c *gin.Context) {
 		ID:              fileID,
 		UserID:          &userIDStr,
 		Title:           file.Filename,
-		OriginalContent: destPath,
+		OriginalContent: destPath,     // Store file path
+		ExtractedText:   textContent,  // Store extracted text content
 		FileType:        filepath.Ext(file.Filename),
 		FileSize:        &fileSize,
 	}
@@ -130,7 +172,7 @@ func OptimizeResume(c *gin.Context) {
 		JobDescriptionText string `json:"jobDescriptionText"`
 		AIModel           string `json:"aiModel" binding:"required"`
 		KeepOnePage       bool   `json:"keepOnePage"`
-		UserAPIKey        string `json:"userApiKey"`
+		UserAPIKeyID      string `json:"userApiKey"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -155,10 +197,10 @@ func OptimizeResume(c *gin.Context) {
 		return
 	}
 
-	// Read the resume file content
-	resumeContent, err := readResumeContent(resume.OriginalContent)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to read resume content: " + err.Error()})
+	// Use the extracted text content for optimization
+	resumeContent := resume.ExtractedText
+	if resumeContent == "" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No extracted text content found for this resume"})
 		return
 	}
 
@@ -174,26 +216,37 @@ func OptimizeResume(c *gin.Context) {
 		jobDescription = fetchedDesc
 	}
 
-	// For now, we'll use a placeholder API key from environment if user doesn't provide one
-	apiKey := req.UserAPIKey
+	// Get user ID from context for API key lookup
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Fetch and decrypt the user's API key
+	apiKey, err := getUserAPIKey(userID.(string), req.UserAPIKeyID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to retrieve API key: " + err.Error()})
+		return
+	}
+
 	if apiKey == "" {
-		apiKey = os.Getenv("DEFAULT_AI_API_KEY")
-		if apiKey == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "API key is required. Please provide your own API key or contact administrator."})
-			return
-		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "API key is required. Please add an API key in Settings."})
+		return
 	}
 
 	// Create optimization session in database
 	sessionID := uuid.New().String()
-	userID := ""
+	sessionUserID := ""
 	if resume.UserID != nil {
-		userID = *resume.UserID
+		sessionUserID = *resume.UserID
+	} else {
+		sessionUserID = userID.(string)
 	}
 	
 	session := models.OptimizationSession{
 		ID:                 sessionID,
-		UserID:            userID,
+		UserID:            sessionUserID,
 		ResumeID:          req.ResumeID,
 		JobDescriptionURL:  &req.JobDescriptionURL,
 		JobDescriptionText: &jobDescription,
@@ -271,4 +324,57 @@ func readResumeContent(filePath string) (string, error) {
 // ApplyFeedback applies feedback to a resume
 func ApplyFeedback(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Apply feedback in development"})
+}
+
+// getUserAPIKey fetches and decrypts a user's API key by ID
+func getUserAPIKey(userID, keyID string) (string, error) {
+	if keyID == "" {
+		return "", fmt.Errorf("API key ID is required")
+	}
+
+	var apiKey models.UserAPIKey
+	if err := database.GetDB().Where("id = ? AND user_id = ?", keyID, userID).First(&apiKey).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", fmt.Errorf("API key not found")
+		}
+		return "", err
+	}
+
+	// Decrypt the API key
+	decryptedKey, err := decryptAPIKey(apiKey.EncryptedKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt API key: %v", err)
+	}
+
+	return decryptedKey, nil
+}
+
+// decryptAPIKey decrypts an encrypted API key
+func decryptAPIKey(encryptedKey string) (string, error) {
+	key := []byte(os.Getenv("ENCRYPTION_KEY"))
+	if len(key) != 32 {
+		key = []byte("f4a7e2b5c8d1f6a9e3b7c2d5f8a1e4b6") // Default fallback
+	}
+
+	ciphertext, err := hex.DecodeString(encryptedKey)
+	if err != nil {
+		return "", err
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+
+	if len(ciphertext) < aes.BlockSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+
+	iv := ciphertext[:aes.BlockSize]
+	ciphertext = ciphertext[aes.BlockSize:]
+
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(ciphertext, ciphertext)
+
+	return string(ciphertext), nil
 }

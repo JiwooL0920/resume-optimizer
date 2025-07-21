@@ -6,7 +6,8 @@ type Resume struct {
 	ID              string    `json:"id" gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	UserID          *string   `json:"user_id" gorm:"type:uuid"`
 	Title           string    `json:"title"`
-	OriginalContent string    `json:"original_content" gorm:"not null;type:text"`
+	OriginalContent string    `json:"original_content" gorm:"not null;type:text"` // File path
+	ExtractedText   string    `json:"extracted_text" gorm:"type:text"`         // Extracted text content
 	FileType        string    `json:"file_type" gorm:"not null;default:pdf"`
 	FileSize        *int      `json:"file_size"`
 	IsActive        bool      `json:"is_active" gorm:"default:true"`
