@@ -1,0 +1,15 @@
+import { configureStore } from '@reduxjs/toolkit'
+import authSlice from './slices/authSlice'
+import resumeSlice from './slices/resumeSlice'
+import optimizationSlice from './slices/optimizationSlice'
+
+export const store = configureStore({
+  reducer: {
+    auth: authSlice,
+    resume: resumeSlice,
+    optimization: optimizationSlice,
+  },
+})
+
+export type RootState = ReturnType<typeof store.getState>
+export type AppDispatch = typeof store.dispatch
