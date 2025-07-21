@@ -5,6 +5,7 @@ import { fetchProfile } from '../../store/slices/authSlice'
 import { AppDispatch } from '../../store'
 import Header from './Header'
 import Login from '../Auth/Login'
+import AuthCallback from '../Auth/AuthCallback'
 import Dashboard from '../Dashboard/Dashboard'
 import OptimizeResume from '../Optimize/OptimizeResume'
 import Settings from '../Settings/Settings'
@@ -25,10 +26,15 @@ const Layout: React.FC = () => {
   }
 
   const renderCurrentPage = () => {
-    // Temporarily disable auth check
-    // if (!isAuthenticated) {
-    //   return <Login />
-    // }
+    // Handle auth callback route
+    if (window.location.pathname === '/auth/callback') {
+      return <AuthCallback />
+    }
+
+    // Check authentication
+    if (!isAuthenticated) {
+      return <Login />
+    }
 
     switch (currentPage) {
       case 'dashboard':

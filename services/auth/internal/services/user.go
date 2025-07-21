@@ -71,3 +71,30 @@ func (s *UserService) GetUserByID(userID string) (*models.User, error) {
 func (s *UserService) UpdateUser(userID string, updates map[string]interface{}) error {
 	return s.db.Model(&models.User{}).Where("id = ?", userID).Updates(updates).Error
 }
+
+func (s *UserService) GetUserAPIKeys(userID string) ([]*models.UserAPIKey, error) {
+	var apiKeys []*models.UserAPIKey
+	if err := s.db.Where("user_id = ?", userID).Find(&apiKeys).Error; err != nil {
+		return nil, err
+	}
+	return apiKeys, nil
+}
+
+func (s *UserService) CreateUserAPIKey(apiKey *models.UserAPIKey) error {
+	return s.db.Create(apiKey).Error
+}
+
+func (s *UserService) DeleteUserAPIKey(userID, keyID string) error {
+	return s.db.Where("user_id = ? AND id = ?", userID, keyID).Delete(&models.UserAPIKey{}).Error
+}
+
+func (s *UserService) GetUserAPIKey(userID, keyID string) (*models.UserAPIKey, error) {
+	var apiKey models.UserAPIKey
+	if err := s.db.Where("user_id = ? AND id = ?", userID, keyID).First(&apiKey).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &apiKey, nil
+}

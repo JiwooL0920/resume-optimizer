@@ -53,11 +53,13 @@ export const optimizeResume = createAsyncThunk(
     jobDescriptionText?: string
     aiModel: string
     keepOnePage: boolean
+    userApiKey?: string
   }) => {
     const response = await fetch('http://localhost:8081/api/v1/optimize/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
       body: JSON.stringify(params)
     })
@@ -81,7 +83,8 @@ export const applyFeedback = createAsyncThunk(
     const response = await fetch('http://localhost:8081/api/v1/optimize/feedback', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
       body: JSON.stringify(params)
     })

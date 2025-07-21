@@ -4,6 +4,7 @@
 .env.development.local
 .env.test.local
 .env.production.local
+.env.docker
 
 # OS generated files
 .DS_Store
@@ -42,6 +43,11 @@ go.work.sum
 /bin/
 /pkg/
 vendor/
+
+# Compiled service binaries
+services/auth/auth-service
+services/resume-processor/resume-processor-service
+*-service
 
 # Node.js specific
 node_modules/

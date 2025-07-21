@@ -14,10 +14,16 @@ import (
 func main() {
 	cfg := config.Load()
 	database.InitDatabase(cfg)
+	handlers.InitHandlers() // Initialize handlers after database is ready
 	
 	r := gin.Default()
 	
 	r.Use(middleware.CORS())
+	
+	// Health check endpoint
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(200, gin.H{"status": "healthy", "service": "auth"})
+	})
 	
 	v1 := r.Group("/api/v1")
 	{
@@ -27,6 +33,14 @@ func main() {
 			auth.GET("/google/callback", handlers.GoogleCallback)
 			auth.POST("/logout", handlers.Logout)
 			auth.GET("/profile", middleware.RequireAuth(), handlers.GetProfile)
+		}
+		
+		user := v1.Group("/user")
+		user.Use(middleware.RequireAuth())
+		{
+			user.GET("/api-keys", handlers.GetUserAPIKeys)
+			user.POST("/api-keys", handlers.CreateUserAPIKey)
+			user.DELETE("/api-keys/:id", handlers.DeleteUserAPIKey)
 		}
 	}
 	

@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -11,8 +12,11 @@ import (
 
 func RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		log.Printf("Auth middleware called for %s %s", c.Request.Method, c.Request.URL.Path)
+		
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			log.Printf("No authorization header provided")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "No authorization token provided",
 			})
@@ -20,9 +24,12 @@ func RequireAuth() gin.HandlerFunc {
 			return
 		}
 
+		log.Printf("Authorization header: %s", authHeader)
+
 		// Extract token from "Bearer token" format
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
+			log.Printf("Invalid authorization header format")
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid authorization header format",
 			})
@@ -30,15 +37,24 @@ func RequireAuth() gin.HandlerFunc {
 			return
 		}
 
+		tokenPreview := tokenString
+		if len(tokenString) > 20 {
+			tokenPreview = tokenString[:20] + "..."
+		}
+		log.Printf("Extracted token: %s", tokenPreview)
+
 		jwtSecret := os.Getenv("JWT_SECRET")
 		claims, err := utils.ValidateJWT(tokenString, jwtSecret)
 		if err != nil {
+			log.Printf("JWT validation failed: %v", err)
 			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid token",
+				"error": "Invalid token: " + err.Error(),
 			})
 			c.Abort()
 			return
 		}
+
+		log.Printf("JWT validation successful for user: %s", claims.Email)
 
 		// Set user information in context
 		c.Set("userID", claims.UserID)

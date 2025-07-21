@@ -17,7 +17,7 @@ interface AuthState {
 
 const initialState: AuthState = {
   user: null,
-  token: localStorage.getItem('token'),
+  token: null, // Clear any stored token for clean start
   isLoading: false,
   error: null,
   isAuthenticated: false,
@@ -26,14 +26,14 @@ const initialState: AuthState = {
 export const loginWithGoogle = createAsyncThunk(
   'auth/loginWithGoogle',
   async () => {
-    window.location.href = '/auth/api/v1/auth/google'
+    window.location.href = 'http://localhost:8080/api/v1/auth/google'
   }
 )
 
 export const logout = createAsyncThunk(
   'auth/logout',
   async () => {
-    const response = await fetch('/auth/api/v1/auth/logout', {
+    const response = await fetch('http://localhost:8080/api/v1/auth/logout', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -50,15 +50,17 @@ export const logout = createAsyncThunk(
 
 export const fetchProfile = createAsyncThunk(
   'auth/fetchProfile',
-  async () => {
-    const response = await fetch('/auth/api/v1/auth/profile', {
+  async (token?: string) => {
+    const authToken = token || localStorage.getItem('token')
+    const response = await fetch('http://localhost:8080/api/v1/auth/profile', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${authToken}`
       }
     })
     
     if (response.ok) {
-      return await response.json()
+      const data = await response.json()
+      return data.user
     }
     throw new Error('Failed to fetch profile')
   }

@@ -1,9 +1,16 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store'
 import { optimizeResume, setSelectedAiModel, setKeepOnePage } from '../../store/slices/optimizationSlice'
 import { AppDispatch } from '../../store'
 import OptimizationPreview from './OptimizationPreview'
+
+interface ApiKey {
+  id: string
+  provider: string
+  masked_key: string
+  created_at: string
+}
 
 const OptimizeResume: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -19,6 +26,57 @@ const OptimizeResume: React.FC = () => {
   const [jobDescriptionUrl, setJobDescriptionUrl] = useState('')
   const [jobDescriptionText, setJobDescriptionText] = useState('')
   const [inputMode, setInputMode] = useState<'url' | 'text'>('url')
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [selectedApiKeyId, setSelectedApiKeyId] = useState('')
+  const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(true)
+  
+  // Fetch user's API keys on component mount
+  useEffect(() => {
+    const fetchApiKeys = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/api/v1/user/api-keys', {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        })
+        if (response.ok) {
+          const data = await response.json()
+          setApiKeys(data.api_keys || [])
+          // Auto-select first key if available and matches current AI model
+          if (data.api_keys && data.api_keys.length > 0) {
+            const matchingKey = data.api_keys.find((key: ApiKey) => {
+              if (selectedAiModel.startsWith('gpt-') && key.provider === 'openai') return true
+              if (selectedAiModel.startsWith('claude-') && key.provider === 'anthropic') return true
+              return false
+            })
+            if (matchingKey) {
+              setSelectedApiKeyId(matchingKey.id)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch API keys:', error)
+      } finally {
+        setIsLoadingApiKeys(false)
+      }
+    }
+    
+    fetchApiKeys()
+  }, [selectedAiModel])
+  
+  // Update selected API key when AI model changes
+  useEffect(() => {
+    const matchingKey = apiKeys.find(key => {
+      if (selectedAiModel.startsWith('gpt-') && key.provider === 'openai') return true
+      if (selectedAiModel.startsWith('claude-') && key.provider === 'anthropic') return true
+      return false
+    })
+    if (matchingKey) {
+      setSelectedApiKeyId(matchingKey.id)
+    } else {
+      setSelectedApiKeyId('')
+    }
+  }, [selectedAiModel, apiKeys])
 
   const handleOptimize = () => {
     if (!selectedResume) {
@@ -31,12 +89,18 @@ const OptimizeResume: React.FC = () => {
       return
     }
 
+    if (!selectedApiKeyId) {
+      alert('Please select an API key or add one in Settings')
+      return
+    }
+
     dispatch(optimizeResume({
       resumeId: selectedResume.id,
       jobDescriptionUrl: inputMode === 'url' ? jobDescriptionUrl : undefined,
       jobDescriptionText: inputMode === 'text' ? jobDescriptionText : undefined,
       aiModel: selectedAiModel,
-      keepOnePage
+      keepOnePage,
+      userApiKey: selectedApiKeyId
     }))
   }
 
@@ -186,6 +250,54 @@ const OptimizeResume: React.FC = () => {
               </select>
             </div>
 
+            <div>
+              <label htmlFor="api-key" className="block text-sm font-medium text-gray-700 mb-2">
+                API Key
+              </label>
+              {isLoadingApiKeys ? (
+                <div className="animate-pulse h-10 bg-gray-200 rounded-md"></div>
+              ) : apiKeys.length === 0 ? (
+                <div className="text-center py-4 border-2 border-dashed border-gray-300 rounded-lg">
+                  <svg className="mx-auto h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                  </svg>
+                  <p className="mt-2 text-sm text-gray-500">No API keys found</p>
+                  <a 
+                    href="/settings" 
+                    className="text-sm text-blue-600 hover:text-blue-500"
+                  >
+                    Add API keys in Settings →
+                  </a>
+                </div>
+              ) : (
+                <select
+                  id="api-key"
+                  value={selectedApiKeyId}
+                  onChange={(e) => setSelectedApiKeyId(e.target.value)}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                >
+                  <option value="">Select an API key...</option>
+                  {apiKeys
+                    .filter(key => {
+                      if (selectedAiModel.startsWith('gpt-')) return key.provider === 'openai'
+                      if (selectedAiModel.startsWith('claude-')) return key.provider === 'anthropic'
+                      return true
+                    })
+                    .map(key => (
+                      <option key={key.id} value={key.id}>
+                        {key.provider.charAt(0).toUpperCase() + key.provider.slice(1)} - {key.masked_key}
+                      </option>
+                    ))
+                  }
+                </select>
+              )}
+              {apiKeys.length > 0 && !selectedApiKeyId && (
+                <p className="text-xs text-red-500 mt-1">
+                  Please select an API key to continue
+                </p>
+              )}
+            </div>
+
             <div className="flex items-start">
               <div className="flex items-center h-5">
                 <input
@@ -214,7 +326,7 @@ const OptimizeResume: React.FC = () => {
         <div className="px-4 py-5 sm:p-6">
           <button
             onClick={handleOptimize}
-            disabled={isOptimizing || !selectedResume || (!jobDescriptionUrl && !jobDescriptionText)}
+            disabled={isOptimizing || !selectedResume || (!jobDescriptionUrl && !jobDescriptionText) || !selectedApiKeyId}
             className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isOptimizing ? (
