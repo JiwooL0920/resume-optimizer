@@ -195,29 +195,193 @@ func (te *TextExtractor) extractFromText(filePath string) (string, error) {
 	return string(content), nil
 }
 
-// cleanTextContent cleans up extracted text content
+// cleanTextContent cleans up extracted text content for better readability
 func (te *TextExtractor) cleanTextContent(text string) string {
-	// Remove excessive whitespace and normalize line breaks
+	fmt.Printf("=== STARTING TEXT CLEANING ===\n")
+	fmt.Printf("Original text length: %d characters\n", len(text))
+	
+	// Step 1: Remove weird symbols and artifacts
+	text = te.removeArtifacts(text)
+	
+	// Step 2: Fix spacing issues
+	text = te.fixSpacing(text)
+	
+	// Step 3: Normalize line breaks and structure
+	text = te.normalizeStructure(text)
+	
+	// Step 4: Final cleanup
+	text = te.finalCleanup(text)
+	
+	fmt.Printf("Cleaned text length: %d characters\n", len(text))
+	fmt.Printf("=== TEXT CLEANING COMPLETE ===\n")
+	
+	return text
+}
+
+// removeArtifacts removes PDF artifacts and weird symbols
+func (te *TextExtractor) removeArtifacts(text string) string {
+	// Remove common PDF symbols and artifacts
+	artifacts := map[string]string{
+		"Ω": " ",     // Replace Ω with space
+		"⊗": "•",     // Replace ⊗ with bullet
+		"∗": "•",     // Replace ∗ with bullet  
+		"§": "",      // Remove section symbol
+		"ï": "",      // Remove weird i
+		"#": "",      // Remove hash in context
+		"&": "and",   // Replace & with and
+		"R&D": "R&D", // Keep R&D as is
+	}
+	
+	for artifact, replacement := range artifacts {
+		if artifact == "R&D" {
+			continue // Skip R&D replacement
+		}
+		text = strings.ReplaceAll(text, artifact, replacement)
+	}
+	
+	// Handle R&D specially
+	text = strings.ReplaceAll(text, "R and D", "R&D")
+	
+	return text
+}
+
+// fixSpacing fixes spacing issues between characters
+func (te *TextExtractor) fixSpacing(text string) string {
+	fmt.Printf("Fixing spacing issues...\n")
+	originalLen := len(text)
+	
+	// Step 1: Fix extremely spaced out text (every character separated)
+	// This handles cases like "J i w o o L e e" -> "JiwooLee"
+	extremeSpacingPattern := regexp.MustCompile(`\b([A-Za-z])(?:\s+([A-Za-z]))+\b`)
+	text = extremeSpacingPattern.ReplaceAllStringFunc(text, func(match string) string {
+		// Remove ALL spaces within the match
+		return strings.ReplaceAll(match, " ", "")
+	})
+	
+	// Step 2: Fix spaced digits in phone numbers and years
+	digitSpacingPattern := regexp.MustCompile(`\b(\d)(?:\s+(\d))+\b`)
+	text = digitSpacingPattern.ReplaceAllStringFunc(text, func(match string) string {
+		return strings.ReplaceAll(match, " ", "")
+	})
+	
+	// Step 3: Fix email addresses specifically  
+	// Handle patterns like "j i w o o @ g m a i l . c o m"
+	emailPattern := regexp.MustCompile(`([a-zA-Z0-9]+(?:\s+[a-zA-Z0-9]+)*)\s*@\s*([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s*\.\s*([a-zA-Z]+(?:\s+[a-zA-Z]+)*)`)
+	text = emailPattern.ReplaceAllStringFunc(text, func(match string) string {
+		// Remove spaces in email components
+		parts := strings.Split(match, "@")
+		if len(parts) == 2 {
+			localPart := strings.ReplaceAll(parts[0], " ", "")
+			domainPart := strings.ReplaceAll(parts[1], " ", "")
+			return localPart + "@" + domainPart
+		}
+		return strings.ReplaceAll(match, " ", "")
+	})
+	
+	// Step 4: Fix URLs like "l i n k e d i n . c o m"
+	urlPattern := regexp.MustCompile(`\b([a-zA-Z]+(?:\s+[a-zA-Z]+)*)\s*\.\s*([a-zA-Z]+(?:\s+[a-zA-Z]+)*)(?:\s*\.\s*([a-zA-Z]+(?:\s+[a-zA-Z]+)*))*(?:\s*/\s*([a-zA-Z0-9]+(?:\s+[a-zA-Z0-9]+)*))*`)
+	text = urlPattern.ReplaceAllStringFunc(text, func(match string) string {
+		return strings.ReplaceAll(match, " ", "")
+	})
+	
+	// Step 5: Fix specific common words that get spaced out
+	commonWords := map[string]string{
+		"S u m m a r y":     "Summary",
+		"E x p e r i e n c e": "Experience", 
+		"E d u c a t i o n":   "Education",
+		"S k i l l s":       "Skills",
+		"P r o j e c t s":    "Projects",
+	}
+	
+	for spaced, fixed := range commonWords {
+		text = strings.ReplaceAll(text, spaced, fixed)
+	}
+	
+	// Step 6: More aggressive general spacing fix
+	// Fix any remaining patterns of single characters separated by spaces
+	singleCharPattern := regexp.MustCompile(`\b([A-Za-z])\s+([A-Za-z])\s+([A-Za-z])\s+([A-Za-z])\s*([A-Za-z]*)\b`)
+	text = singleCharPattern.ReplaceAllStringFunc(text, func(match string) string {
+		return strings.ReplaceAll(match, " ", "")
+	})
+	
+	// Step 7: Fix remaining 3-character spaced patterns
+	threeCharPattern := regexp.MustCompile(`\b([A-Za-z])\s+([A-Za-z])\s+([A-Za-z])\b`)
+	text = threeCharPattern.ReplaceAllStringFunc(text, func(match string) string {
+		return strings.ReplaceAll(match, " ", "")
+	})
+	
+	fmt.Printf("Spacing fix: %d -> %d characters\n", originalLen, len(text))
+	return text
+}
+
+// normalizeStructure improves text structure and formatting
+func (te *TextExtractor) normalizeStructure(text string) string {
+	// Split into lines and clean each line
 	lines := strings.Split(text, "\n")
 	var cleanLines []string
 	
 	for _, line := range lines {
-		// Trim whitespace and remove empty lines
-		cleaned := strings.TrimSpace(line)
-		if cleaned != "" {
-			cleanLines = append(cleanLines, cleaned)
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		
+		// Add proper spacing after sections
+		if te.isSectionHeader(line) {
+			if len(cleanLines) > 0 {
+				cleanLines = append(cleanLines, "") // Add blank line before section
+			}
+			cleanLines = append(cleanLines, line)
+			cleanLines = append(cleanLines, "") // Add blank line after section
+		} else {
+			cleanLines = append(cleanLines, line)
 		}
 	}
 	
-	result := strings.Join(cleanLines, "\n")
+	return strings.Join(cleanLines, "\n")
+}
+
+// isSectionHeader checks if a line is likely a section header
+func (te *TextExtractor) isSectionHeader(line string) bool {
+	sectionHeaders := []string{
+		"Summary", "Technical Skills", "Experience", "Education", 
+		"Certifications", "Projects", "Skills", "Work Experience",
+		"Professional Experience", "Leadership", "Activity",
+	}
 	
+	for _, header := range sectionHeaders {
+		if strings.Contains(strings.ToLower(line), strings.ToLower(header)) {
+			return true
+		}
+	}
+	return false
+}
+
+// finalCleanup performs final text cleanup
+func (te *TextExtractor) finalCleanup(text string) string {
 	// Remove control characters and non-printable characters
-	result = strings.Map(func(r rune) rune {
+	text = strings.Map(func(r rune) rune {
 		if r < 32 && r != '\n' && r != '\t' {
 			return -1 // Remove character
 		}
 		return r
-	}, result)
+	}, text)
+	
+	// Clean up excessive whitespace but preserve structure
+	lines := strings.Split(text, "\n")
+	var finalLines []string
+	
+	for _, line := range lines {
+		// Clean up spaces within lines but keep single spaces
+		line = regexp.MustCompile(`\s+`).ReplaceAllString(line, " ")
+		line = strings.TrimSpace(line)
+		finalLines = append(finalLines, line)
+	}
+	
+	// Remove excessive empty lines (max 2 consecutive)
+	result := strings.Join(finalLines, "\n")
+	excessiveNewlines := regexp.MustCompile(`\n{3,}`)
+	result = excessiveNewlines.ReplaceAllString(result, "\n\n")
 	
 	return strings.TrimSpace(result)
 }
