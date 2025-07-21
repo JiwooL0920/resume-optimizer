@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
-import { useSelector } from 'react-redux'
-import { RootState } from '../../store'
+import React, { useState, useEffect } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
+import { RootState, AppDispatch } from '../../store'
+import { fetchApiKeys, createApiKey, deleteApiKey, clearError } from '../../store/slices/apiKeysSlice'
 
 interface ApiKey {
   id: string
@@ -10,66 +11,34 @@ interface ApiKey {
 }
 
 const Settings: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>()
   const { user } = useSelector((state: RootState) => state.auth)
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const { keys: apiKeys, isLoading, error } = useSelector((state: RootState) => state.apiKeys)
   const [isAddingKey, setIsAddingKey] = useState(false)
   const [newKeyProvider, setNewKeyProvider] = useState('openai')
   const [newKeyValue, setNewKeyValue] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    dispatch(fetchApiKeys())
+  }, [dispatch])
+
+  useEffect(() => {
+    if (error) {
+      alert(error)
+      dispatch(clearError())
+    }
+  }, [error, dispatch])
 
   const handleAddApiKey = async () => {
     if (!newKeyValue.trim()) return
-
-    setIsLoading(true)
-    try {
-      const response = await fetch('/api/v1/user/api-keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          provider: newKeyProvider,
-          api_key: newKeyValue
-        })
-      })
-
-      if (response.ok) {
-        const newKey = await response.json()
-        setApiKeys([...apiKeys, newKey])
-        setNewKeyValue('')
-        setIsAddingKey(false)
-      } else {
-        throw new Error('Failed to add API key')
-      }
-    } catch (error) {
-      console.error('Error adding API key:', error)
-      alert('Failed to add API key. Please try again.')
-    } finally {
-      setIsLoading(false)
-    }
+    dispatch(createApiKey({ provider: newKeyProvider, api_key: newKeyValue }))
+    setNewKeyValue('')
+    setIsAddingKey(false)
   }
 
   const handleDeleteApiKey = async (keyId: string) => {
     if (!window.confirm('Are you sure you want to delete this API key?')) return
-
-    try {
-      const response = await fetch(`/api/v1/user/api-keys/${keyId}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      })
-
-      if (response.ok) {
-        setApiKeys(apiKeys.filter(key => key.id !== keyId))
-      } else {
-        throw new Error('Failed to delete API key')
-      }
-    } catch (error) {
-      console.error('Error deleting API key:', error)
-      alert('Failed to delete API key. Please try again.')
-    }
+    dispatch(deleteApiKey(keyId))
   }
 
   const providerLogos: { [key: string]: string } = {

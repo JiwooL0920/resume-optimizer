@@ -48,7 +48,7 @@ type Feedback struct {
 
 type UserAPIKey struct {
 	ID           string    `json:"id" gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	UserID       string    `json:"user_id" gorm:"not null;type:uuid"`
+	UserID       string    `json:"user_id" gorm:"column:user_id;not null;type:uuid"`
 	Provider     string    `json:"provider" gorm:"not null"`
 	EncryptedKey string    `json:"-" gorm:"not null;type:text"`
 	CreatedAt    time.Time `json:"created_at"`

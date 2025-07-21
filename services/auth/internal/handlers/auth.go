@@ -181,14 +181,20 @@ func CreateUserAPIKey(c *gin.Context) {
 		return
 	}
 
+	userIDStr := userID.(string)
+	log.Printf("Creating API key for user: %s, provider: %s", userIDStr, req.Provider)
+	
 	apiKey := &models.UserAPIKey{
 		ID:           uuid.New().String(),
-		UserID:       userID.(string),
+		UserID:       userIDStr,
 		Provider:     req.Provider,
 		EncryptedKey: encryptedKey,
 	}
 
+	log.Printf("API key struct: ID=%s, UserID=%s, Provider=%s", apiKey.ID, apiKey.UserID, apiKey.Provider)
+
 	if err := userService.CreateUserAPIKey(apiKey); err != nil {
+		log.Printf("Failed to create API key: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save API key: " + err.Error()})
 		return
 	}

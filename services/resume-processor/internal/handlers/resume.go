@@ -27,9 +27,11 @@ func init() {
 
 // UploadResume uploads a new resume to the server
 func UploadResume(c *gin.Context) {
-	// Temporarily disable auth check for testing
-	userID := "test-user" // Default test user ID
-	_ = userID // Use the variable to avoid unused error
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	file, err := c.FormFile("file")
 	if err != nil {
@@ -45,9 +47,10 @@ func UploadResume(c *gin.Context) {
 	}
 
 	fileSize := int(file.Size)
+	userIDStr := userID.(string)
 	resume := models.Resume{
 		ID:              fileID,
-		UserID:          &userID,
+		UserID:          &userIDStr,
 		Title:           file.Filename,
 		OriginalContent: destPath,
 		FileType:        filepath.Ext(file.Filename),
@@ -59,18 +62,21 @@ func UploadResume(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"id": fileID})
+	c.JSON(http.StatusOK, resume)
 }
 
 // GetResume retrieves a resume by ID for the authenticated user
 func GetResume(c *gin.Context) {
-	// Temporarily disable auth check for testing
-	userID := "test-user" // Default test user ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	id := c.Param("id")
 	var resume models.Resume
 
-	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID).First(&resume).Error; err != nil {
+	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID.(string)).First(&resume).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Resume not found"})
 			return
@@ -101,11 +107,14 @@ func ListResumes(c *gin.Context) {
 
 // DeleteResume deletes a resume by ID for the authenticated user
 func DeleteResume(c *gin.Context) {
-	// Temporarily disable auth check for testing
-	userID := "test-user" // Default test user ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 
 	id := c.Param("id")
-	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID).Delete(&models.Resume{}).Error; err != nil {
+	if err := database.GetDB().Where("id = ? AND user_id = ?", id, userID.(string)).Delete(&models.Resume{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB error: " + err.Error()})
 		return
 	}

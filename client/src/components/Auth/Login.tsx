@@ -11,25 +11,7 @@ const Login: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">ResumeOptimizer</h1>
-            </div>
-            <div className="flex items-center">
-              <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                Sign in
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div className="flex items-center justify-center min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
           <div>
             <div className="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100">
@@ -108,7 +90,6 @@ const Login: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
     </div>
   )
 }

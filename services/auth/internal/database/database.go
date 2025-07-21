@@ -19,7 +19,7 @@ func InitDatabase(cfg *config.Config) {
 	}
 
 	// Auto-migrate the schema
-	err = DB.AutoMigrate(&models.User{})
+	err = DB.AutoMigrate(&models.User{}, &models.UserAPIKey{})
 	if err != nil {
 		log.Fatal("Failed to migrate database:", err)
 	}
