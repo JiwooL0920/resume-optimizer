@@ -1,0 +1,6 @@
+apiVersion: v2
+name: resume-optimizer-client
+description: Resume Optimizer Client Helm chart
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

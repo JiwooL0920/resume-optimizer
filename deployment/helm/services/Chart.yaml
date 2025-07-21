@@ -1,0 +1,6 @@
+apiVersion: v2
+name: resume-optimizer-services
+description: Resume Optimizer Backend Services Helm chart
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

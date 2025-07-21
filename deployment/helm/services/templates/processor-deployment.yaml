@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resume-processor
+  labels:
+    app: resume-processor
+spec:
+  replicas: {{ .Values.resumeProcessor.replicaCount }}
+  selector:
+    matchLabels:
+      app: resume-processor
+  template:
+    metadata:
+      labels:
+        app: resume-processor
+    spec:
+      containers:
+        - name: resume-processor
+          image: "{{ .Values.resumeProcessor.image.repository }}:{{ .Values.resumeProcessor.image.tag }}"
+          imagePullPolicy: {{ .Values.resumeProcessor.image.pullPolicy }}
+          ports:
+            - containerPort: 8081
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.resumeProcessor.env.DATABASE_URL }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resume-processor
+spec:
+  selector:
+    app: resume-processor
+  ports:
+    - protocol: TCP
+      port: {{ .Values.resumeProcessor.service.port }}
+      targetPort: 8081
+  type: {{ .Values.resumeProcessor.service.type }}

@@ -1,0 +1,32 @@
+authService:
+  replicaCount: 2
+  image:
+    repository: resume-optimizer-auth
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  env:
+    DATABASE_URL: "postgres://postgres:password@postgresql-cluster-rw.cnpg-system.svc.cluster.local:5432/resume_optimizer?sslmode=disable"
+    JWT_SECRET: "your-jwt-secret-change-in-production"
+
+resumeProcessor:
+  replicaCount: 2
+  image:
+    repository: resume-optimizer-processor
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8081
+  env:
+    DATABASE_URL: "postgres://postgres:password@postgresql-cluster-rw.cnpg-system.svc.cluster.local:5432/resume_optimizer?sslmode=disable"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
