@@ -40,6 +40,7 @@ func UploadResume(c *gin.Context) {
 	fileSize := int(file.Size)
 	resume := models.Resume{
 		ID:              fileID,
+		Title:           file.Filename,
 		OriginalContent: destPath,
 		FileType:        filepath.Ext(file.Filename),
 		FileSize:        &fileSize,

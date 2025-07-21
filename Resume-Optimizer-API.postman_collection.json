@@ -1,0 +1,325 @@
+{
+	"info": {
+		"_postman_id": "resume-optimizer-api",
+		"name": "Resume Optimizer API",
+		"description": "API collection for testing the Resume Optimizer services - Auth Service (port 8080) and Resume Processor Service (port 8081)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth Service",
+			"description": "Authentication and user management endpoints",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "{{jwt_token}}",
+								"type": "text",
+								"description": "JWT token obtained from Google auth callback"
+							}
+						],
+						"url": {
+							"raw": "{{auth_service_url}}/profile",
+							"host": [
+								"{{auth_service_url}}"
+							],
+							"path": [
+								"profile"
+							]
+						},
+						"description": "Get user profile information using JWT token"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{auth_service_url}}/logout",
+							"host": [
+								"{{auth_service_url}}"
+							],
+							"path": [
+								"logout"
+							]
+						},
+						"description": "Logout user session"
+					},
+					"response": []
+				},
+				{
+					"name": "Google Auth (Redirect)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{auth_service_url}}/auth/google",
+							"host": [
+								"{{auth_service_url}}"
+							],
+							"path": [
+								"auth",
+								"google"
+							]
+						},
+						"description": "Initiates Google OAuth flow - will redirect to Google login"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Resume Service",
+			"description": "Resume upload, management and optimization endpoints",
+			"item": [
+				{
+					"name": "Upload Resume",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": [],
+									"description": "Resume file to upload (PDF, DOC, DOCX supported)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{resume_service_url}}/api/v1/resumes/upload",
+							"host": [
+								"{{resume_service_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"resumes",
+								"upload"
+							]
+						},
+						"description": "Upload a resume file. Returns a unique ID for the uploaded resume."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resume by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{resume_service_url}}/api/v1/resumes/{{resume_id}}",
+							"host": [
+								"{{resume_service_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"resumes",
+								"{{resume_id}}"
+							]
+						},
+						"description": "Get details of a specific resume by its ID"
+					},
+					"response": []
+				},
+				{
+					"name": "List All Resumes",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{resume_service_url}}/api/v1/resumes/",
+							"host": [
+								"{{resume_service_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"resumes",
+								""
+							]
+						},
+						"description": "Get a list of all uploaded resumes"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Resume",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{resume_service_url}}/api/v1/resumes/{{resume_id}}",
+							"host": [
+								"{{resume_service_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"resumes",
+								"{{resume_id}}"
+							]
+						},
+						"description": "Delete a resume by its ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Optimize Resume",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resume_id\": \"{{resume_id}}\",\n    \"job_description\": \"Software Engineer position requiring React, Node.js, and database experience\",\n    \"optimization_type\": \"job_match\"\n}"
+						},
+						"url": {
+							"raw": "{{resume_service_url}}/api/v1/optimize/",
+							"host": [
+								"{{resume_service_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"optimize",
+								""
+							]
+						},
+						"description": "Optimize a resume for a specific job description (currently in development)"
+					},
+					"response": []
+				},
+				{
+					"name": "Apply Feedback",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"resume_id\": \"{{resume_id}}\",\n    \"feedback\": {\n        \"suggestions\": [\n            \"Add more quantifiable achievements\",\n            \"Include relevant technical skills\",\n            \"Improve formatting consistency\"\n        ],\n        \"priority\": \"high\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{resume_service_url}}/api/v1/optimize/feedback",
+							"host": [
+								"{{resume_service_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"optimize",
+								"feedback"
+							]
+						},
+						"description": "Apply feedback to improve a resume (currently in development)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Health Checks",
+			"description": "Service health and status checks",
+			"item": [
+				{
+					"name": "Auth Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{auth_service_url}}/health",
+							"host": [
+								"{{auth_service_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Check if auth service is running"
+					},
+					"response": []
+				},
+				{
+					"name": "Resume Service Health",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{resume_service_url}}/health",
+							"host": [
+								"{{resume_service_url}}"
+							],
+							"path": [
+								"health"
+							]
+						},
+						"description": "Check if resume processor service is running"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "auth_service_url",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "resume_service_url",
+			"value": "http://localhost:8081",
+			"type": "string"
+		},
+		{
+			"key": "jwt_token",
+			"value": "your-jwt-token-here",
+			"type": "string"
+		},
+		{
+			"key": "resume_id",
+			"value": "sample-resume-id",
+			"type": "string"
+		}
+	]
+}

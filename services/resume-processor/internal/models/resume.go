@@ -4,8 +4,8 @@ import "time"
 
 type Resume struct {
 	ID              string    `json:"id" gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
-	UserID          string    `json:"user_id" gorm:"not null;type:uuid"`
-	Title           string    `json:"title" gorm:"not null"`
+	UserID          *string   `json:"user_id" gorm:"type:uuid"`
+	Title           string    `json:"title"`
 	OriginalContent string    `json:"original_content" gorm:"not null;type:text"`
 	FileType        string    `json:"file_type" gorm:"not null;default:pdf"`
 	FileSize        *int      `json:"file_size"`
