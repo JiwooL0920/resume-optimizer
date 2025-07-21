@@ -54,11 +54,10 @@ export const optimizeResume = createAsyncThunk(
     aiModel: string
     keepOnePage: boolean
   }) => {
-    const response = await fetch('/api/v1/optimize/', {
+    const response = await fetch('http://localhost:8081/api/v1/optimize/', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(params)
     })
@@ -79,11 +78,10 @@ export const applyFeedback = createAsyncThunk(
       user_comment: string
     }>
   }) => {
-    const response = await fetch('/api/v1/optimize/feedback', {
+    const response = await fetch('http://localhost:8081/api/v1/optimize/feedback', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify(params)
     })

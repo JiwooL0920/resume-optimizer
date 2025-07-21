@@ -32,7 +32,7 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="ml-5">
               <h1 className="text-2xl font-bold text-gray-900">
-                Welcome back, {user?.name}!
+                Welcome back, {user?.name || 'User'}!
               </h1>
               <p className="text-gray-600 mt-1">
                 Manage your resumes and optimize them for specific job opportunities

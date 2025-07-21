@@ -8,10 +8,12 @@ import (
 	"github.com/resume-optimizer/auth-service/internal/handlers"
 	"github.com/resume-optimizer/auth-service/internal/middleware"
 	"github.com/resume-optimizer/auth-service/internal/config"
+	"github.com/resume-optimizer/auth-service/internal/database"
 )
 
 func main() {
-	_ = config.Load()
+	cfg := config.Load()
+	database.InitDatabase(cfg)
 	
 	r := gin.Default()
 	

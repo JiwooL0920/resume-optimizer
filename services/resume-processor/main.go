@@ -7,9 +7,16 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/resume-optimizer/resume-processor/internal/handlers"
 	"github.com/resume-optimizer/resume-processor/internal/middleware"
+	"github.com/resume-optimizer/resume-processor/internal/database"
 )
 
 func main() {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		databaseURL = "postgres://user:password@localhost/resume_optimizer?sslmode=disable"
+	}
+	database.InitDatabase(databaseURL)
+
 	r := gin.Default()
 	
 	r.Use(middleware.CORS())

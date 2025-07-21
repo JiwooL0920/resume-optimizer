@@ -2,22 +2,47 @@ package middleware
 
 import (
 	"net/http"
+	"os"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/resume-optimizer/auth-service/internal/utils"
 )
 
 func RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token := c.GetHeader("Authorization")
-		if token == "" {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "No authorization token provided",
 			})
 			c.Abort()
 			return
 		}
-		
-		// TODO: Implement JWT token validation
+
+		// Extract token from "Bearer token" format
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid authorization header format",
+			})
+			c.Abort()
+			return
+		}
+
+		jwtSecret := os.Getenv("JWT_SECRET")
+		claims, err := utils.ValidateJWT(tokenString, jwtSecret)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid token",
+			})
+			c.Abort()
+			return
+		}
+
+		// Set user information in context
+		c.Set("userID", claims.UserID)
+		c.Set("userEmail", claims.Email)
 		c.Next()
 	}
 }

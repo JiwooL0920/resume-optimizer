@@ -25,9 +25,10 @@ const Layout: React.FC = () => {
   }
 
   const renderCurrentPage = () => {
-    if (!isAuthenticated) {
-      return <Login />
-    }
+    // Temporarily disable auth check
+    // if (!isAuthenticated) {
+    //   return <Login />
+    // }
 
     switch (currentPage) {
       case 'dashboard':
@@ -43,8 +44,8 @@ const Layout: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isAuthenticated && <Header onNavigate={handleNavigate} currentPage={currentPage} />}
-      <main className={isAuthenticated ? "max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8" : ""}>
+      <Header onNavigate={handleNavigate} currentPage={currentPage} />
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {renderCurrentPage()}
       </main>
     </div>

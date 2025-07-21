@@ -31,11 +31,7 @@ const initialState: ResumeState = {
 export const fetchResumes = createAsyncThunk(
   'resume/fetchResumes',
   async () => {
-    const response = await fetch('/api/v1/resumes/', {
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    })
+    const response = await fetch('http://localhost:8081/api/v1/resumes/')
     
     if (response.ok) {
       return await response.json()
@@ -50,11 +46,8 @@ export const uploadResume = createAsyncThunk(
     const formData = new FormData()
     formData.append('resume', file)
     
-    const response = await fetch('/api/v1/resumes/upload', {
+    const response = await fetch('http://localhost:8081/api/v1/resumes/upload', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
       body: formData
     })
     
@@ -68,11 +61,8 @@ export const uploadResume = createAsyncThunk(
 export const deleteResume = createAsyncThunk(
   'resume/deleteResume',
   async (resumeId: string) => {
-    const response = await fetch(`/api/v1/resumes/${resumeId}`, {
-      method: 'DELETE',
-      headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+    const response = await fetch(`http://localhost:8081/api/v1/resumes/${resumeId}`, {
+      method: 'DELETE'
     })
     
     if (response.ok) {
