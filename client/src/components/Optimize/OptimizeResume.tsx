@@ -1,16 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { Link } from 'react-router-dom'
 import { RootState } from '../../store'
 import { optimizeResume, setSelectedAiModel, setKeepOnePage } from '../../store/slices/optimizationSlice'
+import { fetchApiKeys } from '../../store/slices/apiKeysSlice'
 import { AppDispatch } from '../../store'
+import { ApiKey } from '../../types'
+import { AI_MODELS } from '../../config/api'
+import { ErrorMessage } from '../UI'
 import OptimizationPreview from './OptimizationPreview'
-
-interface ApiKey {
-  id: string
-  provider: string
-  masked_key: string
-  created_at: string
-}
 
 const OptimizeResume: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -22,47 +20,17 @@ const OptimizeResume: React.FC = () => {
     selectedAiModel, 
     keepOnePage 
   } = useSelector((state: RootState) => state.optimization)
+  const { keys: apiKeys, isLoading: isLoadingApiKeys } = useSelector((state: RootState) => state.apiKeys)
 
   const [jobDescriptionUrl, setJobDescriptionUrl] = useState('')
   const [jobDescriptionText, setJobDescriptionText] = useState('')
   const [inputMode, setInputMode] = useState<'url' | 'text'>('url')
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
   const [selectedApiKeyId, setSelectedApiKeyId] = useState('')
-  const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(true)
   
   // Fetch user's API keys on component mount
   useEffect(() => {
-    const fetchApiKeys = async () => {
-      try {
-        const response = await fetch('http://localhost:8080/api/v1/user/api-keys', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        })
-        if (response.ok) {
-          const data = await response.json()
-          setApiKeys(data.api_keys || [])
-          // Auto-select first key if available and matches current AI model
-          if (data.api_keys && data.api_keys.length > 0) {
-            const matchingKey = data.api_keys.find((key: ApiKey) => {
-              if (selectedAiModel.startsWith('gpt-') && key.provider === 'openai') return true
-              if (selectedAiModel.startsWith('claude-') && key.provider === 'anthropic') return true
-              return false
-            })
-            if (matchingKey) {
-              setSelectedApiKeyId(matchingKey.id)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch API keys:', error)
-      } finally {
-        setIsLoadingApiKeys(false)
-      }
-    }
-    
-    fetchApiKeys()
-  }, [selectedAiModel])
+    dispatch(fetchApiKeys())
+  }, [dispatch])
   
   // Update selected API key when AI model changes
   useEffect(() => {
@@ -80,17 +48,17 @@ const OptimizeResume: React.FC = () => {
 
   const handleOptimize = () => {
     if (!selectedResume) {
-      alert('Please select a resume first from the Dashboard')
+      // This is handled by the disabled state, but keeping as fallback
       return
     }
 
     if (!jobDescriptionUrl && !jobDescriptionText) {
-      alert('Please provide either a job description URL or text')
+      // This is handled by the disabled state, but keeping as fallback
       return
     }
 
     if (!selectedApiKeyId) {
-      alert('Please select an API key or add one in Settings')
+      // This is handled by the disabled state, but keeping as fallback
       return
     }
 
@@ -243,10 +211,11 @@ const OptimizeResume: React.FC = () => {
                 onChange={(e) => dispatch(setSelectedAiModel(e.target.value))}
                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
               >
-                <option value="gpt-4">GPT-4 (OpenAI)</option>
-                <option value="gpt-3.5-turbo">GPT-3.5 Turbo (OpenAI)</option>
-                <option value="claude-3-opus">Claude 3 Opus (Anthropic)</option>
-                <option value="claude-3-sonnet">Claude 3 Sonnet (Anthropic)</option>
+                {Object.entries(AI_MODELS).map(([key, model]) => (
+                  <option key={key} value={key}>
+                    {model.label} ({model.provider.charAt(0).toUpperCase() + model.provider.slice(1)})
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -262,12 +231,12 @@ const OptimizeResume: React.FC = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                   </svg>
                   <p className="mt-2 text-sm text-gray-500">No API keys found</p>
-                  <a 
-                    href="/settings" 
+                  <Link 
+                    to="/settings" 
                     className="text-sm text-blue-600 hover:text-blue-500"
                   >
                     Add API keys in Settings →
-                  </a>
+                  </Link>
                 </div>
               ) : (
                 <select
@@ -343,21 +312,11 @@ const OptimizeResume: React.FC = () => {
           </button>
           
           {error && (
-            <div className="mt-4 rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="flex-shrink-0">
-                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">Optimization failed</h3>
-                  <div className="mt-2 text-sm text-red-700">
-                    <p>{error}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <ErrorMessage 
+              error={error} 
+              title="Optimization failed"
+              className="mt-4"
+            />
           )}
         </div>
       </div>

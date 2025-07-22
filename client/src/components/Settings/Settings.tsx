@@ -2,13 +2,8 @@ import React, { useState, useEffect } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState, AppDispatch } from '../../store'
 import { fetchApiKeys, createApiKey, deleteApiKey, clearError } from '../../store/slices/apiKeysSlice'
-
-interface ApiKey {
-  id: string
-  provider: string
-  masked_key: string
-  created_at: string
-}
+import { ApiKey } from '../../types'
+import { ErrorMessage, SuccessMessage } from '../UI'
 
 const Settings: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -17,6 +12,9 @@ const Settings: React.FC = () => {
   const [isAddingKey, setIsAddingKey] = useState(false)
   const [newKeyProvider, setNewKeyProvider] = useState('openai')
   const [newKeyValue, setNewKeyValue] = useState('')
+  const [showError, setShowError] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   useEffect(() => {
     dispatch(fetchApiKeys())
@@ -24,21 +22,28 @@ const Settings: React.FC = () => {
 
   useEffect(() => {
     if (error) {
-      alert(error)
-      dispatch(clearError())
+      setShowError(true)
     }
-  }, [error, dispatch])
+  }, [error])
 
   const handleAddApiKey = async () => {
     if (!newKeyValue.trim()) return
-    dispatch(createApiKey({ provider: newKeyProvider, api_key: newKeyValue }))
-    setNewKeyValue('')
-    setIsAddingKey(false)
+    const result = await dispatch(createApiKey({ provider: newKeyProvider, api_key: newKeyValue }))
+    if (createApiKey.fulfilled.match(result)) {
+      setSuccessMessage(`${newKeyProvider.charAt(0).toUpperCase() + newKeyProvider.slice(1)} API key added successfully`)
+      setShowSuccess(true)
+      setNewKeyValue('')
+      setIsAddingKey(false)
+    }
   }
 
-  const handleDeleteApiKey = async (keyId: string) => {
+  const handleDeleteApiKey = async (keyId: string, provider: string) => {
     if (!window.confirm('Are you sure you want to delete this API key?')) return
-    dispatch(deleteApiKey(keyId))
+    const result = await dispatch(deleteApiKey(keyId))
+    if (deleteApiKey.fulfilled.match(result)) {
+      setSuccessMessage(`${provider.charAt(0).toUpperCase() + provider.slice(1)} API key deleted successfully`)
+      setShowSuccess(true)
+    }
   }
 
   const providerLogos: { [key: string]: string } = {
@@ -57,6 +62,28 @@ const Settings: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Error Messages */}
+      {showError && error && (
+        <ErrorMessage 
+          error={error} 
+          onDismiss={() => {
+            setShowError(false)
+            dispatch(clearError())
+          }}
+        />
+      )}
+
+      {/* Success Messages */}
+      {showSuccess && successMessage && (
+        <SuccessMessage 
+          message={successMessage} 
+          onDismiss={() => {
+            setShowSuccess(false)
+            setSuccessMessage('')
+          }}
+        />
+      )}
+
       {/* Header */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
@@ -211,7 +238,7 @@ const Settings: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleDeleteApiKey(key.id)}
+                    onClick={() => handleDeleteApiKey(key.id, key.provider)}
                     className="text-red-600 hover:text-red-800 p-2"
                     title="Delete API key"
                   >

@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, memo, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store'
 import { uploadResume } from '../../store/slices/resumeSlice'
 import { AppDispatch } from '../../store'
+import { ErrorMessage } from '../UI'
 
 const ResumeUpload: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
@@ -10,26 +11,16 @@ const ResumeUpload: React.FC = () => {
   const [dragActive, setDragActive] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleFiles = (files: FileList | null) => {
+  const handleFiles = useCallback((files: FileList | null) => {
     if (files && files[0]) {
       const file = files[0]
       
-      // Validate file type
-      const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-      if (!allowedTypes.includes(file.type)) {
-        alert('Please upload a PDF or Word document')
-        return
-      }
-
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB')
-        return
-      }
+      // Validation is now handled by the file input accept attribute and backend
+      // Additional client-side validation can be added here if needed
 
       dispatch(uploadResume(file))
     }
-  }
+  }, [dispatch])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -136,28 +127,13 @@ const ResumeUpload: React.FC = () => {
       </div>
 
       {error && (
-        <div className="rounded-md bg-red-50 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Upload failed</h3>
-              <div className="mt-2 text-sm text-red-700">
-                <p>{error}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ErrorMessage 
+          error={error} 
+          title="Upload failed"
+        />
       )}
     </div>
   )
 }
 
-export default ResumeUpload
+export default memo(ResumeUpload)

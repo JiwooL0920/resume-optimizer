@@ -1,38 +1,39 @@
-import React from 'react'
+import React, { memo, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '../../store'
 import { selectResume, deleteResume } from '../../store/slices/resumeSlice'
 import { AppDispatch } from '../../store'
+import { Resume } from '../../types'
 
 const ResumeList: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>()
   const { resumes, selectedResume } = useSelector((state: RootState) => state.resume)
 
-  const handleSelectResume = (resume: any) => {
+  const handleSelectResume = useCallback((resume: Resume) => {
     dispatch(selectResume(resume))
-  }
+  }, [dispatch])
 
-  const handleDeleteResume = (resumeId: string) => {
+  const handleDeleteResume = useCallback((resumeId: string) => {
     if (window.confirm('Are you sure you want to delete this resume?')) {
       dispatch(deleteResume(resumeId))
     }
-  }
+  }, [dispatch])
 
-  const formatFileSize = (bytes: number) => {
+  const formatFileSize = useCallback((bytes: number) => {
     if (bytes === 0) return '0 Bytes'
     const k = 1024
     const sizes = ['Bytes', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
+  }, [])
 
-  const formatDate = (dateString: string) => {
+  const formatDate = useCallback((dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
     })
-  }
+  }, [])
 
   if (resumes.length === 0) {
     return (
@@ -138,4 +139,4 @@ const ResumeList: React.FC = () => {
   )
 }
 
-export default ResumeList
+export default memo(ResumeList)

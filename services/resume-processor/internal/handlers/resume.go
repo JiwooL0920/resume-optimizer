@@ -139,7 +139,7 @@ func ListResumes(c *gin.Context) {
 	}
 
 	var resumes []models.Resume
-	if err := database.GetDB().Where("user_id = ?", userID.(string)).Find(&resumes).Error; err != nil {
+	if err := database.GetDB().Where("user_id = ?", userID.(string)).Omit("User").Find(&resumes).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "DB error: " + err.Error()})
 		return
 	}

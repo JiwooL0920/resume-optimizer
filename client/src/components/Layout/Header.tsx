@@ -1,21 +1,23 @@
-import React from 'react'
+import React, { memo, useCallback } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
+import { Link, useNavigate } from 'react-router-dom'
 import { RootState } from '../../store'
 import { logout } from '../../store/slices/authSlice'
 import { AppDispatch } from '../../store'
 
 interface HeaderProps {
-  onNavigate: (page: string) => void
   currentPage: string
 }
 
-const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
+const Header: React.FC<HeaderProps> = ({ currentPage }) => {
   const dispatch = useDispatch<AppDispatch>()
+  const navigate = useNavigate()
   const { user, isAuthenticated } = useSelector((state: RootState) => state.auth)
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     dispatch(logout())
-  }
+    navigate('/login')
+  }, [dispatch, navigate])
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -28,8 +30,8 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
             
             {isAuthenticated && (
               <nav className="hidden md:ml-6 md:flex md:space-x-8">
-                <button
-                  onClick={() => onNavigate('dashboard')}
+                <Link
+                  to="/dashboard"
                   className={`${
                     currentPage === 'dashboard'
                       ? 'border-blue-500 text-gray-900'
@@ -37,9 +39,9 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                   } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
                 >
                   Dashboard
-                </button>
-                <button
-                  onClick={() => onNavigate('optimize')}
+                </Link>
+                <Link
+                  to="/optimize"
                   className={`${
                     currentPage === 'optimize'
                       ? 'border-blue-500 text-gray-900'
@@ -47,9 +49,9 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                   } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
                 >
                   Optimize
-                </button>
-                <button
-                  onClick={() => onNavigate('settings')}
+                </Link>
+                <Link
+                  to="/settings"
                   className={`${
                     currentPage === 'settings'
                       ? 'border-blue-500 text-gray-900'
@@ -57,7 +59,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                   } whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm`}
                 >
                   Settings
-                </button>
+                </Link>
               </nav>
             )}
           </div>
@@ -83,12 +85,12 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                 </button>
               </div>
             ) : (
-              <button
-                onClick={() => onNavigate('login')}
+              <Link
+                to="/login"
                 className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
               >
                 Sign in
-              </button>
+              </Link>
             )}
           </div>
         </div>
@@ -97,4 +99,4 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
   )
 }
 
-export default Header
+export default memo(Header)
