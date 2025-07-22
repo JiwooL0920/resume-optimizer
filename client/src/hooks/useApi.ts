@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { AppDispatch, RootState } from '../store'
 import { 
   fetchApiKeys, 
-  addApiKey, 
+  createApiKey, 
   deleteApiKey 
 } from '../store/slices/apiKeysSlice'
 import { 
@@ -25,7 +25,7 @@ export const useApiKeys = () => {
   }, [dispatch])
 
   const addKey = useCallback((provider: string, apiKey: string) => {
-    return dispatch(addApiKey({ provider, key: apiKey }))
+    return dispatch(createApiKey({ provider, api_key: apiKey }))
   }, [dispatch])
 
   const deleteKey = useCallback((keyId: string) => {
@@ -55,7 +55,7 @@ export const useApiKeys = () => {
 // Custom hook for resume operations
 export const useResumes = () => {
   const dispatch = useDispatch<AppDispatch>()
-  const { resumes, selectedResume, isUploading, isLoading, error } = useSelector(
+  const { resumes, selectedResume, isLoading, error, uploadProgress } = useSelector(
     (state: RootState) => state.resume
   )
 
@@ -82,7 +82,7 @@ export const useResumes = () => {
   return {
     resumes,
     selectedResume,
-    isUploading,
+    uploadProgress,
     isLoading,
     error,
     fetchResumeList,
@@ -102,15 +102,8 @@ export const useOptimization = () => {
     return dispatch(optimizeResume(request))
   }, [dispatch])
 
-  const isOptimizing = optimizationState.isOptimizing
-  const currentSession = optimizationState.currentSession
-  const error = optimizationState.error
-
   return {
     startOptimization,
-    isOptimizing,
-    currentSession,
-    error,
     ...optimizationState,
   }
 }

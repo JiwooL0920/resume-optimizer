@@ -24,7 +24,7 @@ export const fetchApiKeys = createAsyncThunk(
   async (_, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/user/api-keys', {
+      const response = await fetch('http://localhost:8080/api/v1/user/api-keys', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -47,7 +47,7 @@ export const createApiKey = createAsyncThunk(
   async ({ provider, api_key }: { provider: string, api_key: string }, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch('/api/v1/user/api-keys', {
+      const response = await fetch('http://localhost:8080/api/v1/user/api-keys', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,8 +60,8 @@ export const createApiKey = createAsyncThunk(
       })
 
       if (response.ok) {
-        const newKey = await response.json()
-        return newKey
+        const data = await response.json()
+        return data.api_key
       } else {
         const error = await response.json()
         throw new Error(error.error || 'Failed to add API key')
@@ -77,7 +77,7 @@ export const deleteApiKey = createAsyncThunk(
   async (keyId: string, { rejectWithValue }) => {
     try {
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/v1/user/api-keys/${keyId}`, {
+      const response = await fetch(`http://localhost:8080/api/v1/user/api-keys/${keyId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`

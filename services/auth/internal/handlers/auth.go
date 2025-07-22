@@ -1,288 +1,219 @@
 package handlers
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/rand"
-	"encoding/hex"
+	"context"
 	"encoding/json"
-	"io"
-	"log"
+	"fmt"
 	"net/http"
-	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/resume-optimizer/auth-service/internal/models"
-	"github.com/resume-optimizer/auth-service/internal/services"
-	"github.com/resume-optimizer/auth-service/internal/utils"
+	"github.com/resume-optimizer/shared/config"
+	"github.com/resume-optimizer/shared/errors"
+	"github.com/resume-optimizer/shared/middleware"
+	"github.com/resume-optimizer/shared/models"
+	"github.com/resume-optimizer/shared/repository"
+	"github.com/resume-optimizer/shared/utils"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
-var (
-	userService *services.UserService
-	jwtSecret   = os.Getenv("JWT_SECRET")
-	oauth2Config = &oauth2.Config{
-		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
-		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
+// AuthHandlers handles authentication-related requests
+type AuthHandlers struct {
+	config      *config.Config
+	jwtService  *utils.JWTService
+	repoManager repository.RepositoryManager
+	oauthConfig *oauth2.Config
+}
+
+// NewAuthHandlers creates a new auth handlers instance
+func NewAuthHandlers(cfg *config.Config, jwtService *utils.JWTService, repoManager repository.RepositoryManager) *AuthHandlers {
+	oauthConfig := &oauth2.Config{
+		ClientID:     cfg.Auth.GoogleClientID,
+		ClientSecret: cfg.Auth.GoogleClientSecret,
+		RedirectURL:  cfg.Auth.GoogleRedirectURL,
+		Scopes:       []string{"openid", "profile", "email"},
 		Endpoint:     google.Endpoint,
-		RedirectURL:  os.Getenv("REDIRECT_URL"),
-		Scopes:       []string{"https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile"},
 	}
-)
 
-// InitHandlers initializes the handlers after database is ready
-func InitHandlers() {
-	log.Println("Initializing handlers with database connection")
-	userService = services.NewUserService()
-	if userService == nil {
-		log.Fatal("Failed to create user service")
+	return &AuthHandlers{
+		config:      cfg,
+		jwtService:  jwtService,
+		repoManager: repoManager,
+		oauthConfig: oauthConfig,
 	}
-	log.Println("Handlers initialized successfully")
 }
 
-// GoogleAuth initiates the OAuth2 flow for Google
-func GoogleAuth(c *gin.Context) {
-	url := oauth2Config.AuthCodeURL("state", oauth2.AccessTypeOffline)
-	c.Redirect(http.StatusTemporaryRedirect, url)
+// GoogleAuth initiates Google OAuth flow
+func (h *AuthHandlers) GoogleAuth(c *gin.Context) {
+	state := uuid.New().String()
+	// In production, store state in session or cache for validation
+	url := h.oauthConfig.AuthCodeURL(state, oauth2.AccessTypeOffline)
+
+	log.Info().
+		Str("state", state).
+		Msg("Initiating Google OAuth flow")
+
+	c.JSON(http.StatusOK, gin.H{
+		"auth_url": url,
+		"state":    state,
+	})
 }
 
-// GoogleCallback handles the OAuth2 callback from Google
-func GoogleCallback(c *gin.Context) {
+// GoogleCallback handles Google OAuth callback
+func (h *AuthHandlers) GoogleCallback(c *gin.Context) {
 	code := c.Query("code")
-	token, err := oauth2Config.Exchange(c, code)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error exchanging code: " + err.Error()})
+	state := c.Query("state")
+
+	if code == "" {
+		appErr := errors.NewValidationError("Authorization code is required")
+		c.JSON(appErr.HTTPStatus, appErr)
 		return
 	}
 
-	client := oauth2Config.Client(c, token)
+	// TODO: Validate state parameter in production
+	// For now, just log it
+	log.Debug().Str("state", state).Msg("OAuth callback received")
+
+	// Exchange code for token
+	token, err := h.oauthConfig.Exchange(context.Background(), code)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to exchange OAuth code for token")
+		appErr := errors.NewExternalServiceError("Google OAuth", err)
+		c.JSON(appErr.HTTPStatus, appErr)
+		return
+	}
+
+	// Get user info from Google
+	client := h.oauthConfig.Client(context.Background(), token)
 	resp, err := client.Get("https://www.googleapis.com/oauth2/v2/userinfo")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error getting user info: " + err.Error()})
+		log.Error().Err(err).Msg("Failed to get user info from Google")
+		appErr := errors.NewExternalServiceError("Google API", err)
+		c.JSON(appErr.HTTPStatus, appErr)
 		return
 	}
 	defer resp.Body.Close()
 
-	var userInfo map[string]interface{}
-	if err = json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error parsing user info: " + err.Error()})
+	var googleUser struct {
+		ID      string `json:"id"`
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Picture string `json:"picture"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&googleUser); err != nil {
+		log.Error().Err(err).Msg("Failed to decode Google user info")
+		appErr := errors.NewExternalServiceError("Google API", err)
+		c.JSON(appErr.HTTPStatus, appErr)
 		return
 	}
 
-	email := userInfo["email"].(string)
-	name := userInfo["name"].(string)
-	picture := userInfo["picture"].(string)
-	googleID := userInfo["id"].(string)
+	ctx := context.Background()
 
-	user, err := userService.GetUserByEmail(email)
+	// Check if user exists
+	user, err := h.repoManager.User().GetByGoogleID(ctx, googleUser.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error accessing user service: " + err.Error()})
-		return
-	}
+		if appErr, ok := err.(*errors.AppError); ok && appErr.Code == errors.ErrCodeNotFound {
+			// Check if user exists by email
+			existingUser, emailErr := h.repoManager.User().GetByEmail(ctx, googleUser.Email)
+			if emailErr != nil {
+				if appErr2, ok := emailErr.(*errors.AppError); ok && appErr2.Code == errors.ErrCodeNotFound {
+					// Create new user
+					user = &models.User{
+						Email:      googleUser.Email,
+						GoogleID:   &googleUser.ID,
+						Name:       googleUser.Name,
+						PictureURL: &googleUser.Picture,
+					}
 
-	if user == nil {
-		user, err = userService.CreateUser(email, name, &googleID, &picture)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error creating user: " + err.Error()})
+					if err := h.repoManager.User().Create(ctx, user); err != nil {
+						log.Error().Err(err).Msg("Failed to create user")
+						appErr := errors.GetAppError(err)
+						c.JSON(appErr.HTTPStatus, appErr)
+						return
+					}
+
+					log.Info().
+						Str("user_id", user.ID).
+						Str("email", user.Email).
+						Msg("Created new user")
+				} else {
+					log.Error().Err(emailErr).Msg("Database error checking user by email")
+					appErr := errors.GetAppError(emailErr)
+					c.JSON(appErr.HTTPStatus, appErr)
+					return
+				}
+			} else {
+				// User exists with email but no Google ID, link accounts
+				existingUser.GoogleID = &googleUser.ID
+				existingUser.PictureURL = &googleUser.Picture
+				if err := h.repoManager.User().Update(ctx, existingUser); err != nil {
+					log.Error().Err(err).Msg("Failed to link Google account")
+					appErr := errors.GetAppError(err)
+					c.JSON(appErr.HTTPStatus, appErr)
+					return
+				}
+				user = existingUser
+
+				log.Info().
+					Str("user_id", user.ID).
+					Str("email", user.Email).
+					Msg("Linked existing user with Google account")
+			}
+		} else {
+			log.Error().Err(err).Msg("Database error getting user by Google ID")
+			appErr := errors.GetAppError(err)
+			c.JSON(appErr.HTTPStatus, appErr)
 			return
 		}
 	}
 
-	jwtToken, err := utils.GenerateJWT(user.ID, user.Email, jwtSecret)
+	// Generate JWT token
+	jwtToken, err := h.jwtService.GenerateToken(user.ID, user.Email)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Could not generate token: " + err.Error()})
+		log.Error().Err(err).Msg("Failed to generate JWT token")
+		appErr := errors.GetAppError(err)
+		c.JSON(appErr.HTTPStatus, appErr)
 		return
 	}
 
-	// Redirect to frontend with token
-	frontendURL := os.Getenv("FRONTEND_URL")
-	if frontendURL == "" {
-		frontendURL = "http://localhost:3000"
-	}
-	
-	redirectURL := frontendURL + "/auth/callback?token=" + jwtToken
-	c.Redirect(http.StatusTemporaryRedirect, redirectURL)
+	log.Info().
+		Str("user_id", user.ID).
+		Str("email", user.Email).
+		Msg("User authenticated successfully")
+
+	// Redirect to frontend callback with token
+	frontendCallbackURL := fmt.Sprintf("%s/auth/callback?token=%s", h.config.Client.BaseURL, jwtToken)
+	c.Redirect(http.StatusFound, frontendCallbackURL)
 }
 
-// Logout of the user session
-func Logout(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"message": "Logout successful"})
-}
-
-// GetProfile returns the profile of the user
-func GetProfile(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+// GetProfile returns the current user's profile
+func (h *AuthHandlers) GetProfile(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		appErr := errors.GetAppError(err)
+		c.JSON(appErr.HTTPStatus, appErr)
 		return
 	}
 
-	user, err := userService.GetUserByID(userID.(string))
+	user, err := h.repoManager.User().GetByID(context.Background(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching user data: " + err.Error()})
+		appErr := errors.GetAppError(err)
+		c.JSON(appErr.HTTPStatus, appErr)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"user": user})
 }
 
-// GetUserAPIKeys returns user's API keys
-func GetUserAPIKeys(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
+// Logout handles user logout
+func (h *AuthHandlers) Logout(c *gin.Context) {
+	// In a stateless JWT system, logout is typically handled client-side
+	// by removing the token from storage
+	// For additional security, you could maintain a blacklist of tokens
 
-	apiKeys, err := userService.GetUserAPIKeys(userID.(string))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error fetching API keys: " + err.Error()})
-		return
-	}
-
-	// Return masked keys for security
-	var responseKeys []gin.H
-	for _, key := range apiKeys {
-		responseKeys = append(responseKeys, gin.H{
-			"id":         key.ID,
-			"provider":   key.Provider,
-			"masked_key": maskAPIKey(key.EncryptedKey),
-			"created_at": key.CreatedAt,
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{"api_keys": responseKeys})
-}
-
-// CreateUserAPIKey creates a new API key for the user
-func CreateUserAPIKey(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	var req struct {
-		Provider string `json:"provider" binding:"required"`
-		APIKey   string `json:"api_key" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})
-		return
-	}
-
-	// Encrypt the API key
-	encryptedKey, err := encryptAPIKey(req.APIKey)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt API key"})
-		return
-	}
-
-	userIDStr := userID.(string)
-	log.Printf("Creating API key for user: %s, provider: %s", userIDStr, req.Provider)
-	
-	apiKey := &models.UserAPIKey{
-		ID:           uuid.New().String(),
-		UserID:       userIDStr,
-		Provider:     req.Provider,
-		EncryptedKey: encryptedKey,
-	}
-
-	log.Printf("API key struct: ID=%s, UserID=%s, Provider=%s", apiKey.ID, apiKey.UserID, apiKey.Provider)
-
-	if err := userService.CreateUserAPIKey(apiKey); err != nil {
-		log.Printf("Failed to create API key: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save API key: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"id":         apiKey.ID,
-		"provider":   apiKey.Provider,
-		"masked_key": maskAPIKey(encryptedKey),
-		"created_at": apiKey.CreatedAt,
-	})
-}
-
-// DeleteUserAPIKey deletes a user's API key
-func DeleteUserAPIKey(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
-	keyID := c.Param("id")
-	if err := userService.DeleteUserAPIKey(userID.(string), keyID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete API key: " + err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "API key deleted successfully"})
-}
-
-// Helper functions for encryption/decryption
-func encryptAPIKey(apiKey string) (string, error) {
-	key := []byte(os.Getenv("ENCRYPTION_KEY"))
-	if len(key) != 32 {
-		// Use a default key if not set (not recommended for production)
-		key = []byte("your-32-byte-encryption-key-here!!")
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	plaintext := []byte(apiKey)
-	ciphertext := make([]byte, aes.BlockSize+len(plaintext))
-	iv := ciphertext[:aes.BlockSize]
-
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		return "", err
-	}
-
-	stream := cipher.NewCFBEncrypter(block, iv)
-	stream.XORKeyStream(ciphertext[aes.BlockSize:], plaintext)
-
-	return hex.EncodeToString(ciphertext), nil
-}
-
-func decryptAPIKey(encryptedKey string) (string, error) {
-	key := []byte(os.Getenv("ENCRYPTION_KEY"))
-	if len(key) != 32 {
-		key = []byte("your-32-byte-encryption-key-here!!")
-	}
-
-	ciphertext, err := hex.DecodeString(encryptedKey)
-	if err != nil {
-		return "", err
-	}
-
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-
-	if len(ciphertext) < aes.BlockSize {
-		return "", err
-	}
-
-	iv := ciphertext[:aes.BlockSize]
-	ciphertext = ciphertext[aes.BlockSize:]
-
-	stream := cipher.NewCFBDecrypter(block, iv)
-	stream.XORKeyStream(ciphertext, ciphertext)
-
-	return string(ciphertext), nil
-}
-
-func maskAPIKey(encryptedKey string) string {
-	if len(encryptedKey) < 8 {
-		return "****"
-	}
-	return encryptedKey[:4] + "****" + encryptedKey[len(encryptedKey)-4:]
+	log.Info().Msg("User logged out")
+	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }

@@ -1,16 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit'
-
-interface Resume {
-  id: string
-  user_id: string
-  title: string
-  original_content: string
-  file_type: string
-  file_size?: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+import { Resume } from '../../types'
 
 interface ResumeState {
   resumes: Resume[]

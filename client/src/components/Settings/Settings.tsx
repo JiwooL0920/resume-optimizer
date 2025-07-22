@@ -233,7 +233,11 @@ const Settings: React.FC = () => {
                         {providerNames[key.provider] || key.provider}
                       </h4>
                       <p className="text-sm text-gray-500">
-                        {key.masked_key} • Added {new Date(key.created_at).toLocaleDateString()}
+                        {key.masked_key} • Added {(() => {
+                          if (!key.created_at) return 'Recently'
+                          const date = new Date(key.created_at)
+                          return isNaN(date.getTime()) ? 'Recently' : date.toLocaleDateString()
+                        })()}
                       </p>
                     </div>
                   </div>

@@ -26,7 +26,16 @@ const initialState: AuthState = {
 export const loginWithGoogle = createAsyncThunk(
   'auth/loginWithGoogle',
   async () => {
-    window.location.href = 'http://localhost:8080/api/v1/auth/google'
+    // Fetch the Google OAuth URL from our backend
+    const response = await fetch('http://localhost:8080/api/v1/auth/google')
+    
+    if (response.ok) {
+      const data = await response.json()
+      // Redirect to Google OAuth URL
+      window.location.href = data.auth_url
+    } else {
+      throw new Error('Failed to get Google OAuth URL')
+    }
   }
 )
 

@@ -15,8 +15,8 @@ services:
 
   auth-service:
     build:
-      context: ./services/auth
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/auth/Dockerfile
     ports:
       - "8080:8080"
     env_file:
@@ -36,8 +36,8 @@ services:
 
   resume-processor:
     build:
-      context: ./services/resume-processor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/resume-processor/Dockerfile
     ports:
       - "8081:8081"
     env_file:
